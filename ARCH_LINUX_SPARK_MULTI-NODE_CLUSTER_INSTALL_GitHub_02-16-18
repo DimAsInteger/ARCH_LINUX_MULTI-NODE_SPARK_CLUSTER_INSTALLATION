@@ -4,7 +4,7 @@
 
 ## Install ARCH LINUX on all slave nodes and the master. I would recommend a minimal package install for the slave nodes that looks something like this:
 
-base base-devel nmap openssh ufw nano git dialog wpa_supplicant jre8-openjdk jdk8-openjdk ## (I'm running Java 8 but Java 9 should probably work fine also.) 
+base base-devel nmap openssh nano git dialog wpa_supplicant jre8-openjdk jdk8-openjdk ## (I'm running Java 8 but Java 9 should probably work fine also.) 
 
 ## enable ssh:
 systemctl enable ssh.service
@@ -102,7 +102,7 @@ nano /etc/sudoers
 
 ## ********************************************************************* INSTALLATION ********************************************************************* ##
 
-## I'm sing Apache Spark version 2.2.0, but you can use the latest version ##
+## I'm using Apache Spark version 2.2.0, but you can use the latest version ##
 
 ## Download spark here using link to tgz:  https://spark.apache.org/downloads.html ##
 
@@ -247,7 +247,8 @@ Setting default log level to "WARN".
 To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
 18/02/16 03:22:39 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus.store.rdbms" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark/jars/datanucleus-rdbms-3.2.9.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-rdbms-3.2.9.jar."
-18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus.api.jdo" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark/jars/datanucleus-api-jdo-3.2.6.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-api-jdo-3.2.6.jar."
+18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus.api.jdo" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL
+ "file:/usr/local/spark/jars/datanucleus-api-jdo-3.2.6.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-api-jdo-3.2.6.jar."
 18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-core-3.2.10.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark/jars/datanucleus-core-3.2.10.jar."
 18/02/16 03:22:43 WARN ObjectStore: Failed to get database global_temp, returning NoSuchObjectException
 Spark context Web UI available at http://192.168.1.194:4040
@@ -391,6 +392,7 @@ Array[(String, Int)] = Array((actors,1), (decline,3), (findtaskfromlist,1), (bis
 
 scala> changeMR.take(20)
 res2: Array[(String, Int)] = Array((replaced,1), (scala,26), (under,11), (offer,2), (agree,1), (limitation,2), (its,3), (event,1), (intentionally,2), (writing,4), (have,2), (include,3), (responsibility,1), (components,2), (express,2), (we,1), (been,2), (stating,1), (appropriateness,1), (scalap,2))
+
 
 
 
