@@ -1,0 +1,412 @@
+## ******************************************************************* PRE-INSTALLATION ******************************************************************* ##
+
+## Original Installation:  10/2017
+
+## Install ARCH LINUX on all slave nodes and the master. I would recommend a minimal package install for the slave nodes that looks something like this:
+
+base base-devel nmap openssh ufw nano git dialog wpa_supplicant jre8-openjdk jdk8-openjdk ## (I'm running Java 8 but Java 9 should probably work fine also.) 
+
+## enable ssh:
+systemctl enable ssh.service
+systemctl start ssh.service
+
+## NOTE:  if you're running a firewall, disable it or simply configure your firewall to allow your nodes to 
+## receive I/O to and from the master node. I've forgotten to perform this simple step a few times in the past and 
+## wasted time rectifying the issue.
+
+## ********************************************************************* CONFIGURATION ********************************************************************* ##
+
+## Once you've finished installing the operating system, connect all of the slave nodes and master to a switch, if they're not already.
+
+## Use nmap to track down the IP addresses for all of the slave and master nodes. Copy them into a file and keep track of them. They'll be of use later. 
+
+# example:
+nmap -sn 192.168.1.*
+
+## ON ALL MASTER AND SLAVE NODES DO THE FOLLOWING:
+
+# Add new user 'spark' to group 'sparkle' that runs both master and slave daemons ## call the user whatever you like as well as the group name.
+# Just make sure you set it up like this:
+
+groupadd sparkle
+useradd -m -G sparkle -s /bin/bash spark
+gpasswd -a spark sparkle
+passwd spark
+exit
+
+# Create DHCPCD static IP address
+
+ip addr
+ip route
+
+nano /etc/dhcpcd.conf
+
+# Add the following lines, for example, depending on the output from ip addr and ip route:
+
+## _______________________________________________
+
+interface enp0s25
+static ip_address=192.168.1.100/24	
+static routers=192.168.1.254
+static domain_name_servers=192.168.1.254
+## _______________________________________________
+
+## REBOOT!
+
+systemctl start dhcpcd@enp0s25.service
+
+ip route ## this should now show 192.168.1.100
+
+systemctl enable dhcpcd@enp0s25.service ## Enable the service
+
+## REBOOT!
+
+## Configure sudoers:
+
+nano /etc/sudoers
+
+	## User privilege specification
+	##
+	root ALL=(ALL) ALL
+	someOtherUser ALL=(ALL) ALL ## for any other user, if needed.
+	spark ALL=(ALL) ALL
+
+	# Uncomment this also:
+
+	%wheel ALL=(ALL) ALL
+
+	# Add this:
+
+    	spark ALL = NOPASSWD: /sbin/shutdown
+
+## exit /etc/sudoers
+
+## AT THIS POINT ALL USERS SHOULD BE CONFIGURED ON ALL NODES!
+
+## GET LOGGED IN TO ALL NODES AND CONFIGURE SSH:
+
+# Configure ssh for the master node: make sure the slaves are all running and logged into user 'spark':
+
+# For the master node:
+
+## Example for master node:  [regularUser@HOSTNAME ~]$ su spark
+
+	## Output:
+	# [spark@HOSTNAME regularUser]$ 
+
+## Example using master node to connect to the slave nodes:  [spark@HOSTNAME regularUser]$ ssh spark@192.168.1.232
+
+	## Output:
+	# Last login: Mon Oct 23 01:12:18 2017 from 192.168.1.209
+	# [spark@node5 ~]$ 
+
+## ********************************************************************* INSTALLATION ********************************************************************* ##
+
+## I'm sing Apache Spark version 2.2.0, but you can use the latest version ##
+
+## Download spark here using link to tgz:  https://spark.apache.org/downloads.html ##
+
+## If you want to install version 2.2.0, as I did, use the following:
+
+# Download link: https://d3kbcqa49mib13.cloudfront.net/spark-2.2.0-bin-hadoop2.7.tgz
+
+	cd /home/spark
+	wget https://d3kbcqa49mib13.cloudfront.net/spark-2.2.0-bin-hadoop2.7.tgz
+
+# I removed an older version of Spark at this point. I've left this here because it may be useful to those who are upgrading version in the future:
+
+	rm spark-1.6.2-bin-hadoop2.6.tgz
+	sudo su
+	cd /usr/local
+	ls
+	rm -rf spark-1.6.1-bin-hadoop2.6
+	rm -rf spark-1.6.2-bin-hadoop2.6 spark
+
+	exit #exit root status
+	cd /home/spark
+
+# Unpack and install spark-2.2.0-bin-hadoop2.7 with permissions:
+
+	sudo tar -zxf spark-2.2.0-bin-hadoop2.7.tgz -C /usr/local/
+	sudo ln -s /usr/local/spark-2.2.0-bin-hadoop2.7 /usr/local/spark
+	sudo chown -R spark:spark /usr/local/spark-2.2.0-bin-hadoop2.7  
+	## or ONLY if the above fails due to 'groups' issues:  
+	sudo chown -R spark /usr/local/spark-2.2.0-bin-hadoop2.7
+
+# Configure spark:
+
+	cd /usr/local/spark/conf
+	cp spark-env.sh.template spark-env.sh
+
+# Adjust the amount of RAM for each node:
+
+	[spark@node5 local]$ free -m
+              	total        used        free      shared  buff/cache   available
+		15493         119       14741           0         631       15098
+
+	# I used 12000m
+
+	nano /usr/local/spark/conf/spark-env.sh.template
+
+		# This file is sourced when running various Spark programs.
+		# Copy it as spark-env.sh and edit that to configure Spark for your site.
+
+		cp spark-env.sh.template spark-env.sh
+
+	nano spark-env-sh
+
+		# NOTE! add to bottom of file and ADJUST FOR THE APPROPRIATE AMT OF MEMORY!!!!!!!!:
+
+			SPARK_MASTER_IP=192.168.1.194 	## List the master IP only for all nodes
+			SPARK_WORKER_MEMORY=12000m 
+
+## *********************************************************************** FINAL CONFIGS *********************************************************************** ##
+
+## The examples below are specific to a 4-node cluster consisting of a master and 3 slave nodes, however, the number of nodes doesn't really matter at this
+## point and everything below serves as a template for all. The name listings for slaves "node2", "node5", and "node6" are merely examples despite their lack of
+## numerical ordering.
+
+# Check file systems to resolve /etc/hosts and /usr/local/spark/config/spark-env.sh modifications:
+nmap -sn 192.168.1.*
+ssh spark@192.168.1.217
+ssh spark@192.168.1.232
+ssh spark@192.168.1.105
+
+# /etc/hosts: static lookup table for host names
+#
+
+192.168.1.194 HOSTNAME
+192.168.1.217 node2
+192.168.1.232 node5
+192.168.1.105 node6
+
+# On the master node ONLY execute the following commands:
+
+ssh-keygen -C "spark@node1" -t rsa -P ""
+cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+ssh-copy-id spark@node2
+ssh-copy-id spark@node5
+ssh-copy-id spark@node6
+
+# Verify that you can login to each node:
+
+ssh spark@HOSTNAME
+ssh spark@node2    
+ssh spark@node5    
+ssh spark@node6
+
+## Problems? If you are running a firewall, it should be disabled or properly configured
+## Just in case, remember to try this also:  systemctl enable sshd.service
+   
+# For each node:
+
+	nano /usr/local/spark/conf/slaves
+
+	HOSTNAME
+	node2
+	node5
+	node6
+
+## *********************************************************************** STARTUP *********************************************************************** ##
+
+## Starting up the system correctly follows with what I've listed below. I've also listed the system shutdown procedure. Enjoy!
+
+[spark@HOSTNAME bin]$ cd /usr/local/spark/sbin
+[spark@HOSTNAME sbin]$ ls
+slaves.sh                       start-slaves.sh
+spark-config.sh                 start-thriftserver.sh
+spark-daemon.sh                 stop-all.sh
+spark-daemons.sh                stop-history-server.sh
+start-all.sh                    stop-master.sh
+start-history-server.sh         stop-mesos-dispatcher.sh
+start-master.sh                 stop-mesos-shuffle-service.sh
+start-mesos-dispatcher.sh       stop-shuffle-service.sh
+start-mesos-shuffle-service.sh  stop-slave.sh
+start-shuffle-service.sh        stop-slaves.sh
+start-slave.sh                  stop-thriftserver.sh
+[spark@HOSTNAME sbin]$ ./start-master.sh
+starting org.apache.spark.deploy.master.Master, logging to /usr/local/spark/logs/spark-spark-org.apache.spark.deploy.master.Master-1-HOSTNAME.out
+[spark@HOSTNAME sbin]$ ./start-slaves.sh
+spark@HOSTNAME: starting org.apache.spark.deploy.worker.Worker, logging to /usr/local/spark/logs/spark-spark-org.apache.spark.deploy.worker.Worker-1-HOSTNAME.out
+node2: starting org.apache.spark.deploy.worker.Worker, logging to /usr/local/spark/logs/spark-spark-org.apache.spark.deploy.worker.Worker-1-node2.out
+node6: starting org.apache.spark.deploy.worker.Worker, logging to /usr/local/spark/logs/spark-spark-org.apache.spark.deploy.worker.Worker-1-node6.out
+node5: starting org.apache.spark.deploy.worker.Worker, logging to /usr/local/spark/logs/spark-spark-org.apache.spark.deploy.worker.Worker-1-node5.out
+[spark@HOSTNAME sbin]$ cd ..
+[spark@HOSTNAME spark]$ cd /usr/local/spark/bin
+[spark@HOSTNAME bin]$ ls
+beeline             pyspark          spark-class2.cmd  spark-shell.cmd
+beeline.cmd         pyspark2.cmd     spark-class.cmd   spark-sql
+derby.log           pyspark.cmd      sparkR            spark-submit
+find-spark-home     README.count     sparkR2.cmd       spark-submit2.cmd
+load-spark-env.cmd  run-example      sparkR.cmd        spark-submit.cmd
+load-spark-env.sh   run-example.cmd  spark-shell
+metastore_db        spark-class      spark-shell2.cmd
+[spark@HOSTNAME bin]$ ./spark-shell
+Using Spark's default log4j profile: org/apache/spark/log4j-defaults.properties
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+18/02/16 03:22:39 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus.store.rdbms" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark/jars/datanucleus-rdbms-3.2.9.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-rdbms-3.2.9.jar."
+18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus.api.jdo" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark/jars/datanucleus-api-jdo-3.2.6.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-api-jdo-3.2.6.jar."
+18/02/16 03:22:40 WARN General: Plugin (Bundle) "org.datanucleus" is already registered. Ensure you dont have multiple JAR versions of the same plugin in the classpath. The URL "file:/usr/local/spark-2.2.0-bin-hadoop2.7/jars/datanucleus-core-3.2.10.jar" is already registered, and you are trying to register an identical plugin located at URL "file:/usr/local/spark/jars/datanucleus-core-3.2.10.jar."
+18/02/16 03:22:43 WARN ObjectStore: Failed to get database global_temp, returning NoSuchObjectException
+Spark context Web UI available at http://192.168.1.194:4040
+Spark context available as 'sc' (master = local[*], app id = local-1518772959575).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\   version 2.2.0
+      /_/
+         
+Using Scala version 2.11.8 (OpenJDK 64-Bit Server VM, Java 1.8.0_144)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> 
+
+## TO SHUT SPARK DOWN:	
+
+## At the "scala>" prompt shown above type:
+## Ctrl + c to exit scala
+## Follow remaining instructions below:
+
+[spark@HOSTNAME sbin]$ cd /usr/local/spark/sbin
+[spark@HOSTNAME sbin]$ ls
+slaves.sh        spark-daemons.sh         start-master.sh                 start-shuffle-service.sh  start-thriftserver.sh   stop-master.sh                 stop-shuffle-service.sh  stop-thriftserver.sh
+spark-config.sh  start-all.sh             start-mesos-dispatcher.sh       start-slave.sh            stop-all.sh             stop-mesos-dispatcher.sh       stop-slave.sh
+spark-daemon.sh  start-history-server.sh  start-mesos-shuffle-service.sh  start-slaves.sh           stop-history-server.sh  stop-mesos-shuffle-service.sh  stop-slaves.sh
+[spark@HOSTNAME sbin]$ ./stop-all.sh
+HOSTNAME: stopping org.apache.spark.deploy.worker.Worker
+node2: stopping org.apache.spark.deploy.worker.Worker
+node5: stopping org.apache.spark.deploy.worker.Worker
+node6: stopping org.apache.spark.deploy.worker.Worker
+stopping org.apache.spark.deploy.master.Master
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#start spark:
+
+cd /usr/local/spark/sbin/
+./start-master.sh
+
+#check log files to make sure install went ok:
+
+cd /usr/local/spark/logs/
+nano spark-root-org.apache.spark.deploy.master.Master-1-node1.out
+
+#if logs ok, then start slaves up on 'consume-red' (MASTER):
+
+cd /usr/local/spark/sbin/
+./start-slaves.sh
+
+#check the log on each node to make sure it started up ok:
+
+cd /usr/local/spark/logs
+nano spark-spark-org.apache.spark.deploy.master.Master-1-node1.out
+
+#Spark Web Service:
+#Go to Spark Web Interface.  It will tell you which slaves|workers are connected to the master, 
+#the active applications as well as the application history. 
+
+#Open up a web browser and ****point to http://<master node>:8080. *****
+#Be sure to verify that the workers you're expecting are logged into the master. 
+#If you don't see 'em, start troubleshooting.
+
+#Run the Spark Shell:
+
+cd /usr/local/spark/bin/
+./spark-shell
+#spark-shell --master spark://<master node>:7077
+
+#or
+
+cd ./usr/local/spark/bin/spark-shell --master spark://<master node>:7077
+
+
+#Run a Distributed Word Count:
+
+val changeFile = sc.textFile("/usr/local/spark/LICENSE")
+changeFile: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[7] at textFile at :21
+
+val changeFileLower = changeFile.map(_.toLowerCase)
+changeFileLower: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[8] at map at :23
+
+val changeFlatMap = changeFileLower.flatMap("[a-z]+".r findAllIn _)
+changeFlatMap: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[9] at flatMap at :25
+
+val changeMR = changeFlatMap.map(word => (word,1)).reduceByKey(_ + _)
+changeMR: org.apache.spark.rdd.RDD[(String, Int)] = ShuffledRDD[11] at reduceByKey at :27
+
+changeMR.take(10)
+Array[(String, Int)] = Array((actors,1), (decline,3), (findtaskfromlist,1), (biswal,4), (greater,2), (runner,1), (counted,1), (order,15), (logwarning,1), (clientbase,1))
+
+#or
+
+scala> changeMR.take(20)
+res2: Array[(String, Int)] = Array((replaced,1), (scala,26), (under,11), (offer,2), (agree,1), (limitation,2), (its,3), (event,1), (intentionally,2), (writing,4), (have,2), (include,3), (responsibility,1), (components,2), (express,2), (we,1), (been,2), (stating,1), (appropriateness,1), (scalap,2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
